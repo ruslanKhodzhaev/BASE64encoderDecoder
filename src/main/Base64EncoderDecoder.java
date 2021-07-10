@@ -6,103 +6,100 @@ import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.Map;
 
-
 public class Base64EncoderDecoder {
 
-    private static final String BASE64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    private static final int BASE64_SIZE = 64;
+    static final String BASE64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    static final int SIZE_MAP_64BIN_CODES = 64;
+    static final int SIZE_64BIN_CODE = 6;
 
     public static void main(String[] args) throws IOException {
-        System.out.println("Input String for Encode:\n");
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
-        String string = reader.readLine();
 
-//      Encode
-        string = base64Encode(string.getBytes());
-        System.out.println(string);
+        // Encode;
+        System.out.print("Input String for Encode: \n");
+        System.out.println(base64Encode(reader.readLine().getBytes()));
 
-//      Decode
-        System.out.println("Input String for Decode:\n");
-        string = reader.readLine();
-        byte[] bytes = Decode64base64(string);
-        for (Byte bt : bytes)
-            System.out.println(byteToBinaryString(bt));
+        // Decode
+        System.out.print("Input String for Decode (UTF-8): \n");
+        System.out.println(new String(DecodeBase64(reader.readLine()), "UTF-8"));
     }
 
-    public static String base64Encode(byte[] data) {
-        int i = 0;
-        String forConcat = "", resultString = "";
-        Map<String, Character> map = new HashMap<String, Character>(BASE64_SIZE);
+    public static String base64Encode(byte[] byteData) {
+        Map<String, Character> map64BinCodeToChar = new HashMap<String, Character>(SIZE_MAP_64BIN_CODES);
+        for (int i = 0; i < SIZE_MAP_64BIN_CODES; i++)
+            map64BinCodeToChar.put(intToBin64value(i), BASE64_CHARS.charAt(i));
 
-        for (i=0; i<BASE64_SIZE; i++)
-            map.put(intToBin64value(i), BASE64_CHARS.charAt(i)); // инициализация мапы BASE64: код -> буква;
+        StringBuilder allBytesString = new StringBuilder();
+        for (Byte b : byteData)
+            allBytesString.append(byteToBinaryString(b));
 
-        for (Byte someByte: data)
-        {
-            forConcat += byteToBinaryString(someByte); // собрали байты в строку для последовательной обработки;
+        // processing the full occurrences of a 6 digit binary code
+        StringBuilder base64String = new StringBuilder();
+        while (allBytesString.length() > SIZE_64BIN_CODE-1) {
+            base64String.append(map64BinCodeToChar.get(allBytesString.substring(0, SIZE_64BIN_CODE)));
+            allBytesString.delete(0, SIZE_64BIN_CODE);
         }
 
-        int countSubstring = forConcat.length() / 6; // кол-во полных вхождений 6-разрядного кода;
-        int enrichCount = 6 - (forConcat.length() % 6 == 0 ? 6 : forConcat.length() % 6);    // фиксируем кол-во символом 0 и '=' для обогащения
+        // the resulting remainder is converted into characters
+        if (allBytesString.length() != 0) {
+            int enrichCount = SIZE_64BIN_CODE - allBytesString.length();
 
-        for (i=0; i < countSubstring; i++) // собираем строку BASE64
-        {
-            resultString += map.get(forConcat.substring(0,6));
-            forConcat = forConcat.substring(6);
+            for (int i = 0; i < enrichCount; i++)
+                allBytesString.append("0");
+            base64String.append(map64BinCodeToChar.get(allBytesString.toString()));
+
+            for (int i = 0; i < enrichCount/2; i++)
+                base64String.append("=");
         }
 
-        if (enrichCount != 0) // обогащение 0 и '='
-        {
-            for (i = 0; i < enrichCount; i++) {
-                forConcat += "0";
-            }
-
-            resultString += map.get(forConcat);
-
-            for (i = 0; i < enrichCount/2; i++) {
-                resultString += "=";
-            }
-        }
-        return resultString;
+        return base64String.toString();
     }
 
-    public static byte[] Decode64base64 (String s) {
-        int i;
-        String tmp = "";
-        Map<Character, String> map = new HashMap<Character, String>(BASE64_SIZE);
+    public static byte[] DecodeBase64(String s) {
+        Map<Character, String> map = new HashMap<Character, String>(SIZE_MAP_64BIN_CODES);
+        for (int i = 0; i < SIZE_MAP_64BIN_CODES; i++)
+            map.put(BASE64_CHARS.charAt(i), intToBin64value(i));
 
-        for (i=0; i<BASE64_SIZE; i++)
-            map.put(BASE64_CHARS.charAt(i), intToBin64value(i)); // инициализация мапы BASE64: буква -> код;
-
-        while(s.charAt(s.length()-1) == '=') // убираем допсимволы
+        while (s.charAt(s.length() - 1) == '=')
             s = s.substring(0, s.length() - 1);
 
+        StringBuilder binaryString = new StringBuilder();
+        for (int i = 0; i < s.length(); i++)
+            binaryString.append(map.get(s.charAt(i)));
 
-        for (i=0; i<s.length(); i++)
-            tmp += map.get(s.charAt(i)); // собираем бинарные коды символов в строку;
-
-        int sizeByteArr = tmp.length()/8; // размер массива для его инициализации;
-        int step = 0;
+        int sizeByteArr = binaryString.length() / Byte.SIZE;
         byte[] bytes = new byte[sizeByteArr];
 
-        for (i=0, step=0; i<sizeByteArr; step+=8, i++) // DECODE
-            bytes[i] = Byte.parseByte(tmp.substring(step, step+8), 2);
+        // DECODE
+        for (int i = 0, step = 0; i < sizeByteArr; step += Byte.SIZE, i++)
+            bytes[i] = parseByte(binaryString.substring(step, step + Byte.SIZE));
 
         return bytes;
     }
 
-    private static String byteToBinaryString(byte x) { // Преобразовние байта в строку для наглядности;
-        char[] buffer = new char[Byte.SIZE];
-        for (int i = 0, mask = 0x80; i < buffer.length; i++, mask >>>= 1) {
-            buffer[i] = (x & mask) == 0 ? '0' : '1';
-        }
-        return new String(buffer);
-    }
     private static String intToBin64value(int x) { // Функция преообразования в 6 значный бинарный код;
         char[] buffer = new char[7];
-        for (int i = 0, mask = 0x40; i < buffer.length; i++, mask >>>= 1) {
+        for (int i = 0, mask = 0x40; i < buffer.length; i++, mask >>>= 1)
             buffer[i] = (x & mask) == 0 ? '0' : '1';
-        }
+
         return new String(buffer).substring(1);
+    }
+
+    private static String byteToBinaryString(byte x) { // Преобразовние байта в строку для наглядности;
+        char[] buffer = new char[Byte.SIZE];
+        for (int i = 0, mask = 0x80; i < buffer.length; i++, mask >>>= 1)
+            buffer[i] = (x & mask) == 0 ? '0' : '1';
+
+        return new String(buffer);
+    }
+
+    private static byte parseByte(String str) {
+        int byteValueRange = Math.abs(Byte.MIN_VALUE) + Byte.MAX_VALUE;
+        int bt = Integer.parseInt(str, 2);
+
+        if (bt < Byte.MIN_VALUE || bt > Byte.MAX_VALUE)
+            bt -= byteValueRange+1;
+
+        return (byte)bt;
     }
 }
